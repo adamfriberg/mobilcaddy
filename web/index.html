@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mobilcaddy</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Mobilcaddy</h1>
+    <select id="holeSelect" disabled></select>
+  </header>
+
+  <main>
+    <section id="status" class="status"></section>
+    <section id="holeInfo" class="hole-info"></section>
+
+    <section class="map-wrap">
+      <svg id="holeMap" viewBox="0 0 300 500" preserveAspectRatio="xMidYMid meet"></svg>
+    </section>
+
+    <section id="distances" class="distances"></section>
+
+    <section class="mapping-toggle">
+      <button id="toggleMapping">Kartläggningsläge</button>
+    </section>
+
+    <section id="mappingPanel" class="mapping-panel" hidden>
+      <p>Ställ dig på punkten och tryck rätt knapp. Kräver adminnyckel.</p>
+      <div class="mapping-grid">
+        <button data-point="tee">Tee</button>
+        <button data-point="green_front">Green fram</button>
+        <button data-point="green_mid">Green mitt</button>
+        <button data-point="green_back">Green bak</button>
+      </div>
+      <div id="mappingLog" class="mapping-log"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

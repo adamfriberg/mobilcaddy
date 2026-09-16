@@ -17,6 +17,7 @@ services:
     environment:
       DATABASE_URL: postgres://mobilcaddy:${DB_PASSWORD}@db:5432/mobilcaddy
       PORT: 3000
+      ADMIN_KEY: ${ADMIN_KEY}
     depends_on:
       - db
     networks:
@@ -30,6 +31,7 @@ services:
       - "8092:8092"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./web:/srv/web:ro
       - mobilcaddy_caddy_data:/data
       - mobilcaddy_caddy_config:/config
     depends_on:

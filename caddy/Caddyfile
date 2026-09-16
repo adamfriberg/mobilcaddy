@@ -5,5 +5,14 @@
 
 78-47-168-243.sslip.io:8092 {
     tls internal
-    reverse_proxy api:3000
+
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
 }
