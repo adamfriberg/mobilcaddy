@@ -12,6 +12,8 @@
     <select id="holeSelect" disabled></select>
   </header>
 
+  <div class="emoji-pop" id="emojiPop" aria-hidden="true">😂</div>
+
   <main>
     <section id="status" class="status"></section>
     <section id="holeInfo" class="hole-info"></section>
@@ -21,6 +23,12 @@
     </section>
 
     <section id="distances" class="distances"></section>
+
+    <section id="caddyTip" class="caddy-tip" hidden>
+      <div class="caddy-club" id="caddyClub"></div>
+      <div class="caddy-advice" id="caddyAdvice"></div>
+      <div class="caddy-footnote">Klubbavstånd är exempeldata tills dina egna sparats i Klubbor.</div>
+    </section>
 
     <section class="mapping-toggle">
       <button id="toggleMapping">Kartläggningsläge</button>
@@ -35,6 +43,33 @@
         <button data-point="green_back">Green bak</button>
       </div>
       <div id="mappingLog" class="mapping-log"></div>
+    </section>
+
+    <section class="scorecard-toggle">
+      <button id="toggleScorecard">Scorekort</button>
+    </section>
+
+    <section id="scorecardPanel" hidden>
+      <div class="sc-card">
+        <div class="sc-head">
+          <div>
+            <div class="name">Adam</div>
+            <div class="sc-hcp-edit">Hcp <input type="number" id="hcpInput" min="0" max="54" value="11"></div>
+          </div>
+          <div class="totals">
+            <div class="score" id="scTotal">–</div>
+            <div class="topar" id="scToPar">–</div>
+          </div>
+        </div>
+        <div class="sc-grid" id="scGridFront"></div>
+        <div class="sc-grid" id="scGridBack"></div>
+        <div class="sc-foot">
+          <div><b id="scParTotal">–</b>Par</div>
+          <div><b id="scGrossNet">–</b>Score (brutto/netto)</div>
+        </div>
+      </div>
+      <p class="sc-legend">Tryck på en siffra för att öka slagen (cyklar tillbaka till tomt). Sparas automatiskt på servern.</p>
+      <button class="sc-reset" id="scNewRound">Starta ny runda</button>
     </section>
   </main>
 

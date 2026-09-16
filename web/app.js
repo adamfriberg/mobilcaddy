@@ -6,11 +6,35 @@ const mapEl = document.getElementById("holeMap");
 const toggleMappingBtn = document.getElementById("toggleMapping");
 const mappingPanel = document.getElementById("mappingPanel");
 const mappingLog = document.getElementById("mappingLog");
+const caddyTipEl = document.getElementById("caddyTip");
+const caddyClubEl = document.getElementById("caddyClub");
+const caddyAdviceEl = document.getElementById("caddyAdvice");
+const toggleScorecardBtn = document.getElementById("toggleScorecard");
+const scorecardPanel = document.getElementById("scorecardPanel");
+const hcpInput = document.getElementById("hcpInput");
+const scNewRoundBtn = document.getElementById("scNewRound");
+const emojiPopEl = document.getElementById("emojiPop");
 
 let holes = [];
 let currentHole = null;
+let currentCourseId = null;
 let currentPosition = null;
 let mappingMode = false;
+let scorecardMode = false;
+let currentRound = null; // { id, scores: { [holeId]: strokes } }
+
+const clubBag = [
+  { name: "Driver", dist: 195 },
+  { name: "3-trä", dist: 180 },
+  { name: "Hybrid", dist: 160 },
+  { name: "5-järn", dist: 145 },
+  { name: "6-järn", dist: 135 },
+  { name: "7-järn", dist: 125 },
+  { name: "8-järn", dist: 115 },
+  { name: "9-järn", dist: 100 },
+  { name: "PW", dist: 85 },
+  { name: "SW", dist: 60 },
+];
 
 function setStatus(msg, isError = false) {
   statusEl.textContent = msg;
@@ -37,6 +61,7 @@ async function loadCourse() {
     setStatus("Ingen bana hittades.", true);
     return;
   }
+  currentCourseId = course.id;
   holes = await fetch(`/api/courses/${course.id}/holes`).then((r) => r.json());
   holeSelect.disabled = false;
   holeSelect.innerHTML = holes
@@ -44,6 +69,8 @@ async function loadCourse() {
     .join("");
   setStatus(`${course.name} — ${holes.length} hål inlästa`);
   selectHole(holes[0]?.id);
+  buildScorecard();
+  loadActiveRound();
 }
 
 function selectHole(holeId) {
@@ -124,19 +151,44 @@ function renderMap() {
 function renderDistances() {
   if (!currentHole || !currentPosition) {
     distancesEl.textContent = currentPosition ? "" : "Väntar på GPS-position...";
+    caddyTipEl.hidden = true;
     return;
   }
   const { lat, lng } = currentPosition;
-  const points = [
-    ["Fram", currentHole.green_front_lat, currentHole.green_front_lng],
-    ["Mitt", currentHole.green_mid_lat, currentHole.green_mid_lng],
-    ["Bak", currentHole.green_back_lat, currentHole.green_back_lng],
-  ];
-  const parts = points.map(([label, glat, glng]) => {
-    const d = distanceMeters(lat, lng, glat, glng);
-    return `${label}: ${d !== null ? d + " m" : "—"}`;
+  const front = distanceMeters(lat, lng, currentHole.green_front_lat, currentHole.green_front_lng);
+  const mid = distanceMeters(lat, lng, currentHole.green_mid_lat, currentHole.green_mid_lng);
+  const back = distanceMeters(lat, lng, currentHole.green_back_lat, currentHole.green_back_lng);
+  const fmt = (d) => (d !== null ? d + " m" : "—");
+  distancesEl.textContent = `Fram: ${fmt(front)} · Mitt: ${fmt(mid)} · Bak: ${fmt(back)}`;
+  updateCaddyTip(mid);
+}
+
+function recommendClub(distance) {
+  let best = clubBag[0];
+  let bestDiff = Math.abs(clubBag[0].dist - distance);
+  clubBag.forEach((c) => {
+    const diff = Math.abs(c.dist - distance);
+    if (diff < bestDiff) { best = c; bestDiff = diff; }
   });
-  distancesEl.textContent = parts.join(" · ");
+  return best;
+}
+
+function updateCaddyTip(mid) {
+  if (mid === null) {
+    caddyTipEl.hidden = true;
+    return;
+  }
+  caddyTipEl.hidden = false;
+  if (mid <= 15) {
+    caddyClubEl.textContent = "Ingen klubba behövs — putt eller kort chip.";
+    caddyAdviceEl.textContent = "Du är precis vid green — tänk kort spel och en säker putt.";
+    return;
+  }
+  const club = recommendClub(mid);
+  caddyClubEl.textContent = `Rekommenderad klubba: ${club.name} (≈${club.dist} m)`;
+  caddyAdviceEl.textContent = mid <= 40
+    ? "Nära green — chippa eller kör en kort wedge in mot flaggan."
+    : `${mid} m kvar till mitten av green.`;
 }
 
 function watchPosition() {
@@ -194,6 +246,166 @@ async function saveCoord(pointPrefix) {
   }
 }
 
+// --- Scorekort ---
+
+function popEmoji() {
+  emojiPopEl.classList.add("show");
+  clearTimeout(popEmoji._t);
+  popEmoji._t = setTimeout(() => emojiPopEl.classList.remove("show"), 3000);
+}
+
+function strokesForHole(hole, hcp) {
+  const base = Math.floor(hcp / 18);
+  const rem = hcp % 18;
+  return base + (hole.handicap_index <= rem ? 1 : 0);
+}
+
+function cellClass(diff) {
+  if (diff <= -3) return "albatross";
+  if (diff === -2) return "eagle";
+  if (diff === -1) return "birdie";
+  if (diff === 1) return "bogey";
+  if (diff === 2) return "dbogey";
+  if (diff >= 3) return "tbogey";
+  return "";
+}
+
+function buildScoreGrid(containerId, subset, totalLabel) {
+  const el = document.getElementById(containerId);
+  const holesRow = '<div class="sc-grid-row holes">' +
+    subset.map((h) => `<span>${h.hole_number}</span>`).join("") +
+    `<span>${totalLabel}</span></div>`;
+  const parRow = '<div class="sc-grid-row par">' +
+    subset.map((h) => `<span>${h.par}</span>`).join("") +
+    `<span class="out" id="scPar-${containerId}">–</span></div>`;
+  const scoreRow = '<div class="sc-grid-row score">' +
+    subset.map((h) => `<span><span class="cell" data-h="${h.id}" id="cell-${h.id}"></span></span>`).join("") +
+    `<span class="out" id="scSub-${containerId}">–</span></div>`;
+  const netRow = '<div class="sc-grid-row net">' +
+    subset.map((h) => `<span id="net-${h.id}">–</span>`).join("") +
+    `<span id="scNetSub-${containerId}">–</span></div>`;
+  el.innerHTML = holesRow + parRow + scoreRow + netRow;
+  el.querySelectorAll(".cell").forEach((cell) => {
+    cell.addEventListener("click", () => handleCellClick(Number(cell.dataset.h)));
+  });
+}
+
+function buildScorecard() {
+  buildScoreGrid("scGridFront", holes.filter((h) => h.hole_number <= 9), "Out");
+  buildScoreGrid("scGridBack", holes.filter((h) => h.hole_number > 9), "In");
+}
+
+async function handleCellClick(holeId) {
+  if (!currentRound) return;
+  const hole = holes.find((h) => h.id === holeId);
+  const cur = currentRound.scores[holeId];
+  let next;
+  if (cur === undefined) next = hole.par;
+  else if (cur < hole.par + 6) next = cur + 1;
+  else next = undefined;
+
+  if (next === undefined) {
+    delete currentRound.scores[holeId];
+    renderScorecard();
+    try {
+      await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, { method: "DELETE" });
+    } catch (err) {
+      setStatus(`Kunde inte spara: ${err.message}`, true);
+    }
+    return;
+  }
+
+  currentRound.scores[holeId] = next;
+  if (next - hole.par >= 3) popEmoji();
+  renderScorecard();
+  try {
+    await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strokes: next }),
+    });
+  } catch (err) {
+    setStatus(`Kunde inte spara: ${err.message}`, true);
+  }
+}
+
+function renderScorecard() {
+  const hcp = Number(hcpInput.value) || 0;
+  const scores = currentRound ? currentRound.scores : {};
+  let total = 0, netTotal = 0, played = 0, frontSum = 0, backSum = 0, frontNet = 0, backNet = 0, playedPar = 0;
+
+  holes.forEach((h) => {
+    const v = scores[h.id];
+    const cell = document.getElementById(`cell-${h.id}`);
+    const netEl = document.getElementById(`net-${h.id}`);
+    if (!cell || !netEl) return;
+    if (v === undefined) {
+      cell.textContent = "";
+      cell.className = "cell empty";
+      netEl.textContent = "–";
+      return;
+    }
+    const diff = v - h.par;
+    cell.textContent = v;
+    cell.className = `cell ${cellClass(diff)}`;
+    const net = v - strokesForHole(h, hcp);
+    netEl.textContent = net;
+    total += v;
+    netTotal += net;
+    played++;
+    playedPar += h.par;
+    if (h.hole_number <= 9) { frontSum += v; frontNet += net; } else { backSum += v; backNet += net; }
+  });
+
+  const frontPar = holes.filter((h) => h.hole_number <= 9).reduce((s, h) => s + h.par, 0);
+  const backPar = holes.filter((h) => h.hole_number > 9).reduce((s, h) => s + h.par, 0);
+  document.getElementById("scPar-scGridFront").textContent = frontPar || "–";
+  document.getElementById("scPar-scGridBack").textContent = backPar || "–";
+  document.getElementById("scSub-scGridFront").textContent = frontSum || "–";
+  document.getElementById("scSub-scGridBack").textContent = backSum || "–";
+  document.getElementById("scNetSub-scGridFront").textContent = frontNet || "–";
+  document.getElementById("scNetSub-scGridBack").textContent = backNet || "–";
+
+  document.getElementById("scParTotal").textContent = frontPar + backPar || "–";
+  document.getElementById("scTotal").textContent = played ? total : "–";
+  const toParEl = document.getElementById("scToPar");
+  if (played) {
+    const toPar = total - playedPar;
+    toParEl.textContent = toPar > 0 ? `+${toPar}` : toPar === 0 ? "E" : toPar;
+    toParEl.className = `topar ${toPar < 0 ? "under" : toPar > 0 ? "over" : ""}`;
+  } else {
+    toParEl.textContent = "–";
+    toParEl.className = "topar";
+  }
+  document.getElementById("scGrossNet").textContent = played ? `${total} / ${netTotal}` : "–";
+}
+
+async function loadActiveRound() {
+  if (!currentCourseId) return;
+  try {
+    const res = await fetch(`/api/rounds/active?course_id=${currentCourseId}`);
+    const data = await res.json();
+    if (data) {
+      currentRound = { id: data.id, scores: data.scores };
+    } else {
+      currentRound = await startNewRound();
+    }
+    renderScorecard();
+  } catch (err) {
+    setStatus(`Kunde inte ladda scorekort: ${err.message}`, true);
+  }
+}
+
+async function startNewRound() {
+  const res = await fetch("/api/rounds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ course_id: currentCourseId }),
+  });
+  const data = await res.json();
+  return { id: data.id, scores: {} };
+}
+
 holeSelect.addEventListener("change", (e) => selectHole(e.target.value));
 
 toggleMappingBtn.addEventListener("click", () => {
@@ -205,6 +417,26 @@ toggleMappingBtn.addEventListener("click", () => {
 document.querySelectorAll("#mappingPanel button[data-point]").forEach((btn) => {
   btn.addEventListener("click", () => saveCoord(btn.dataset.point));
 });
+
+toggleScorecardBtn.addEventListener("click", () => {
+  scorecardMode = !scorecardMode;
+  scorecardPanel.hidden = !scorecardMode;
+  toggleScorecardBtn.textContent = scorecardMode ? "Dölj scorekort" : "Scorekort";
+});
+
+hcpInput.addEventListener("input", () => {
+  localStorage.setItem("mc_hcp", hcpInput.value);
+  renderScorecard();
+});
+
+scNewRoundBtn.addEventListener("click", async () => {
+  if (!confirm("Starta en ny runda? Den pågående rundan avslutas.")) return;
+  currentRound = await startNewRound();
+  renderScorecard();
+});
+
+const savedHcp = localStorage.getItem("mc_hcp");
+if (savedHcp) hcpInput.value = savedHcp;
 
 loadCourse().catch((err) => setStatus(`Kunde inte ladda bana: ${err.message}`, true));
 watchPosition();

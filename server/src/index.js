@@ -98,6 +98,86 @@ app.put("/api/holes/:id/coords", requireAdminKey, async (req, res) => {
   }
 });
 
+async function getUserId() {
+  const { rows } = await pool.query("SELECT id FROM users ORDER BY id LIMIT 1");
+  if (rows.length === 0) throw new Error("no user seeded — run migrations");
+  return rows[0].id;
+}
+
+app.get("/api/rounds/active", async (req, res) => {
+  try {
+    const courseId = req.query.course_id;
+    if (!courseId) return res.status(400).json({ error: "course_id required" });
+    const userId = await getUserId();
+    const { rows } = await pool.query(
+      `SELECT id, played_at FROM rounds
+       WHERE course_id = $1 AND user_id = $2 AND finished = false
+       ORDER BY played_at DESC LIMIT 1`,
+      [courseId, userId]
+    );
+    if (rows.length === 0) return res.json(null);
+    const round = rows[0];
+    const scoresResult = await pool.query(
+      "SELECT hole_id, strokes FROM hole_scores WHERE round_id = $1",
+      [round.id]
+    );
+    const scores = {};
+    scoresResult.rows.forEach((r) => { scores[r.hole_id] = r.strokes; });
+    res.json({ id: round.id, played_at: round.played_at, scores });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/rounds", async (req, res) => {
+  try {
+    const { course_id } = req.body;
+    if (!course_id) return res.status(400).json({ error: "course_id required" });
+    const userId = await getUserId();
+    await pool.query(
+      "UPDATE rounds SET finished = true WHERE course_id = $1 AND user_id = $2 AND finished = false",
+      [course_id, userId]
+    );
+    const { rows } = await pool.query(
+      "INSERT INTO rounds (user_id, course_id) VALUES ($1, $2) RETURNING id, played_at",
+      [userId, course_id]
+    );
+    res.json({ id: rows[0].id, played_at: rows[0].played_at, scores: {} });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/rounds/:roundId/holes/:holeId", async (req, res) => {
+  try {
+    const { strokes } = req.body;
+    if (!Number.isInteger(strokes) || strokes < 1) {
+      return res.status(400).json({ error: "strokes must be a positive integer" });
+    }
+    await pool.query(
+      `INSERT INTO hole_scores (round_id, hole_id, strokes)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (round_id, hole_id) DO UPDATE SET strokes = EXCLUDED.strokes`,
+      [req.params.roundId, req.params.holeId, strokes]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/rounds/:roundId/holes/:holeId", async (req, res) => {
+  try {
+    await pool.query(
+      "DELETE FROM hole_scores WHERE round_id = $1 AND hole_id = $2",
+      [req.params.roundId, req.params.holeId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`mobilcaddy-api listening on port ${port}`);
