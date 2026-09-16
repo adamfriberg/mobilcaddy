@@ -4,5 +4,6 @@
 }
 
 78-47-168-243.sslip.io:8092 {
+    tls internal
     reverse_proxy api:3000
 }
