@@ -1,0 +1,32 @@
+-- Adds hole images and tactical tips (Fas 2.5 — Jönköpings GK banguide import)
+
+ALTER TABLE holes ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE holes ADD COLUMN IF NOT EXISTS tips TEXT;
+
+UPDATE holes SET image_url = '/images/holes/hole-' || LPAD(hole_number::text, 2, '0') || '.jpg'
+FROM courses c
+WHERE holes.course_id = c.id AND c.name = 'Jönköpings GK';
+
+UPDATE holes h SET tips = t.tip
+FROM courses c
+JOIN (VALUES
+  (1,  'Normalt sett ett lätt öppningshål. Här gäller det att lägga sig mitt i banan. Bunkrar till vänster och järnvägen till höger har stor dragningskraft. Ligger man till höger finns också risk för att man hamnar i mask för andra slaget. Med ett bra utslag kan den långt slående med sitt andra slag nå in på green. Då måste man vara säker på att framförvarande boll lämnat green. Vi övriga lägger oss kort green för ett säkert par.'),
+  (2,  'Försök att få utslaget till höger om björken som står på kullen i dogleggen. Har du hcp 3 eller högre så kan du med fördel utnyttja dina extraslag på hålet och spela det som ett par 5. Så varför inte då lägga sig kort om green för att undvika ett eventuellt bunkerbesök och chippa säkert in mot green på tredjeslaget.'),
+  (3,  'Högersidan fram mot green är out of bounds och se upp för hög ruff till vänster från utslaget. För de som slår relativt långt finns tre bunkrar i spel. Du kan undvika dem genom att hålla utslaget till vänster eller att spela kort den första bunkern. Den långt slående med precision slår sitt utslag mellan bunkrarna för ett kort inspel mot green. Vid inspel är det lätt att hamna i bunkern till höger om green - ett kort inspel studsar gärna ner där.'),
+  (4,  'Ett till synes kort och lätt hål men skenet kan bedra. Placera utslaget på högra sidan av fairway. Undvik bunkrar till höger och vänster. Två relativt djupa bunkrar på vardera sidan inramar en green med två platåer.'),
+  (5,  'Ett nog så trixigt par 3-hål. Kräver ofta lite mer klubba på grund av att det ofta blåser motvind. Raviner på båda sidorna och dessutom framför greenen. Två djupa bunkrar på vardera sidan av greenen har stor dragningskraft.'),
+  (6,  'Ett av banans svåraste hål. Sikta med utslaget lite till höger om öppningen i träden på andra sidan kullen. Bollen kommer tillbaka något till vänster på grund av lutningen. Till vänster i svackan efter kullen ligger en fairwaybunker som fångar upp slag med lite längd. Ingången till greenen vaktas av två bunkrar.'),
+  (7,  'En kort par 4 dogleg vänster. De flesta slår ut med ett långt järn, hybrid eller en spoon. Sikta helst ut på högersidan för att slippa ligga mask på vänstersidan. Både vänster- och högersidans ingång till greenen vaktas av bunkrar. Dessutom finns ytterligare en bunker på vänstersidan. Alldeles till höger om den högra greenbunkern går out-gränsen.'),
+  (8,  'Ett av våra lättaste par 3-hål på banan kan man tro och greenen kan vara svår att träffa i motvind. Stora bunkrar på vardera sidan fångar upp sneda slag.'),
+  (9,  'Ett av de längre par 4-hålen som kräver en ordentlig drive för att få ett komfortabelt andraslag. De flesta siktar något till vänster med utslaget för att komma ifrån out-gränsen som löper längs hela högersidan. En ganska platt green vaktas av totalt fyra bunkrar. Ett missat inspel till höger om den högra bunkern kan lätt studsa out-of-bounds då marken lutar något.'),
+  (10, 'Banans mest ondulerade green. Två djupa bunkrar på vänster sida och en bunker och djup ravin till höger. När flaggan är placerad på den nedre platån kan du spela bollen lite förbi hålet och låta den rulla/spinna tillbaka något.'),
+  (11, 'Ett klassiskt och ganska svårt hål med out of bounds på hela vänstersidan och djup ravin på högersidan. En grund bunker till höger mellan greenen och ravinen. En liten rund bunker vänster bakkant om green. Den försiktige siktar på vänstra sidan av green och är mycket nöjd med en tvåputt.'),
+  (12, 'En svårighet med detta långa hål är utslaget med out of bounds till vänster och en ravin till höger. Bästa läge för andraslaget är att placera utslaget på högra delen av fairway. Ditt andraslag spelas ner i eller över en ca 100 m lång svacka detta beroende på slaglängd. Greenen som lutar något mot dig har en bunker på vardera ingångssida.'),
+  (13, 'Ett relativt enkelt hål och för den långtslående är det bara ett slag med en järnklubba över kullen och en kort wedge in på green. Spela utslaget mot högra delen av fairway eftersom det lutar åt vänster efter kullen. Långa utslag på högersidan samlas emellertid upp av bunkrar snett framför green.'),
+  (14, 'Banans kanske enklaste men även vackraste hål. Den långtslående spelaren siktar ofta något åt höger medan medelgolfaren med fördel kan sikta lite mer mot mitten av fairway. Elitspelaren når efter en bra drive ganska enkelt till green på två slag. Har du koll på var flaggan står på green kan du välja att spela till vänster eller höger om eken för att underlätta tredjeslaget till den väl inbunkrade greenen.'),
+  (15, 'Ett kort par 4-hål. Här väljer många att slå ut med en järnklubba, hybrid eller metallwood, gärna på högersidan, för att bara passera krönet. Därefter har du bara 100-110 m kvar till green. Hela vänstersidan är out-of-bounds och fairway lutar dessutom åt det hållet. Två bunkrar till höger om green och en grund bunker till vänster om den green.'),
+  (16, 'Ett kort men klurigt par 3-hål speciellt när flaggan är placerad på den nedre platån och du frestas att flörta med vattnet i Tabergsån. Greenen är väl inbunkrad och med två olika platåer. Känn av vinden innan utslaget.'),
+  (17, 'Från tee är det ganska smalt men efter åkröken breddas fairway betydligt. Du behöver slå utslaget med carry ca 170/140 m för att passera ån. Se upp för fairwaybunkern till höger. Hela vänstersidan samt snett bakom om green är markerat pliktområde. Greenområdet lutar åt vänster så sikta på greenens högra del med inspelet. En stor och djup bunker finns till vänster om green.'),
+  (18, 'Ett långt avslutningshål som kräver en bra drive för att du ska nå in på två slag. Järnvägen på högersidan markerar banan gräns. De flesta väljer att sikta något till vänster, dock inte för mycket för då kan du hamna i ganska svår ruff. Inspelet sker mot en platt green med en bunker på vardera sidan.')
+) AS t(hole_number, tip) ON t.hole_number = h.hole_number
+WHERE h.course_id = c.id AND c.name = 'Jönköpings GK';

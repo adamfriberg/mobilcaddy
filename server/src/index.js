@@ -35,6 +35,7 @@ app.get("/api/courses/:id/holes", async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, hole_number, par, length_meters, handicap_index,
+              image_url, tips,
               tee_lat, tee_lng,
               green_front_lat, green_front_lng,
               green_mid_lat, green_mid_lng,

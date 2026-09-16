@@ -56,7 +56,14 @@ function selectHole(holeId) {
 
 function renderHoleInfo() {
   if (!currentHole) return;
-  holeInfoEl.textContent = `Hål ${currentHole.hole_number} · Par ${currentHole.par} · ${currentHole.length_meters ?? "?"} m · Hcp ${currentHole.handicap_index ?? "?"}`;
+  const meta = `Hål ${currentHole.hole_number} · Par ${currentHole.par} · ${currentHole.length_meters ?? "?"} m · Hcp ${currentHole.handicap_index ?? "?"}`;
+  const image = currentHole.image_url
+    ? `<img src="${currentHole.image_url}" alt="Hål ${currentHole.hole_number}" class="hole-image">`
+    : "";
+  const tips = currentHole.tips
+    ? `<p class="hole-tips">${currentHole.tips.replace(/\n/g, "<br>")}</p>`
+    : "";
+  holeInfoEl.innerHTML = `<div class="hole-meta">${meta}</div>${image}${tips}`;
 }
 
 function hasGreenCoords(h) {
