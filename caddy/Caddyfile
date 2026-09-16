@@ -1,8 +1,8 @@
 {
-    http_port 8081
-    https_port 8090
+    http_port 8091
+    https_port 8092
 }
 
-78-47-168-243.sslip.io:8090 {
+78-47-168-243.sslip.io:8092 {
     reverse_proxy api:3000
 }
