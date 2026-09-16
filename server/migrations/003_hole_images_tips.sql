@@ -8,8 +8,7 @@ FROM courses c
 WHERE holes.course_id = c.id AND c.name = 'Jönköpings GK';
 
 UPDATE holes h SET tips = t.tip
-FROM courses c
-JOIN (VALUES
+FROM courses c, (VALUES
   (1,  'Normalt sett ett lätt öppningshål. Här gäller det att lägga sig mitt i banan. Bunkrar till vänster och järnvägen till höger har stor dragningskraft. Ligger man till höger finns också risk för att man hamnar i mask för andra slaget. Med ett bra utslag kan den långt slående med sitt andra slag nå in på green. Då måste man vara säker på att framförvarande boll lämnat green. Vi övriga lägger oss kort green för ett säkert par.'),
   (2,  'Försök att få utslaget till höger om björken som står på kullen i dogleggen. Har du hcp 3 eller högre så kan du med fördel utnyttja dina extraslag på hålet och spela det som ett par 5. Så varför inte då lägga sig kort om green för att undvika ett eventuellt bunkerbesök och chippa säkert in mot green på tredjeslaget.'),
   (3,  'Högersidan fram mot green är out of bounds och se upp för hög ruff till vänster från utslaget. För de som slår relativt långt finns tre bunkrar i spel. Du kan undvika dem genom att hålla utslaget till vänster eller att spela kort den första bunkern. Den långt slående med precision slår sitt utslag mellan bunkrarna för ett kort inspel mot green. Vid inspel är det lätt att hamna i bunkern till höger om green - ett kort inspel studsar gärna ner där.'),
@@ -28,5 +27,5 @@ JOIN (VALUES
   (16, 'Ett kort men klurigt par 3-hål speciellt när flaggan är placerad på den nedre platån och du frestas att flörta med vattnet i Tabergsån. Greenen är väl inbunkrad och med två olika platåer. Känn av vinden innan utslaget.'),
   (17, 'Från tee är det ganska smalt men efter åkröken breddas fairway betydligt. Du behöver slå utslaget med carry ca 170/140 m för att passera ån. Se upp för fairwaybunkern till höger. Hela vänstersidan samt snett bakom om green är markerat pliktområde. Greenområdet lutar åt vänster så sikta på greenens högra del med inspelet. En stor och djup bunker finns till vänster om green.'),
   (18, 'Ett långt avslutningshål som kräver en bra drive för att du ska nå in på två slag. Järnvägen på högersidan markerar banan gräns. De flesta väljer att sikta något till vänster, dock inte för mycket för då kan du hamna i ganska svår ruff. Inspelet sker mot en platt green med en bunker på vardera sidan.')
-) AS t(hole_number, tip) ON t.hole_number = h.hole_number
-WHERE h.course_id = c.id AND c.name = 'Jönköpings GK';
+) AS t(hole_number, tip)
+WHERE h.course_id = c.id AND c.name = 'Jönköpings GK' AND h.hole_number = t.hole_number;
