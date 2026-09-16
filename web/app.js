@@ -279,14 +279,19 @@ function buildScoreGrid(containerId, subset, totalLabel) {
     subset.map((h) => `<span>${h.par}</span>`).join("") +
     `<span class="out" id="scPar-${containerId}">–</span></div>`;
   const scoreRow = '<div class="sc-grid-row score">' +
-    subset.map((h) => `<span><span class="cell" data-h="${h.id}" id="cell-${h.id}"></span></span>`).join("") +
+    subset.map((h) => {
+      let opts = '<option value="">–</option>';
+      for (let s = 1; s <= h.par + 8; s++) opts += `<option value="${s}">${s}</option>`;
+      return `<span><select class="cell" data-h="${h.id}" id="cell-${h.id}">${opts}</select></span>`;
+    }).join("") +
     `<span class="out" id="scSub-${containerId}">–</span></div>`;
   const netRow = '<div class="sc-grid-row net">' +
     subset.map((h) => `<span id="net-${h.id}">–</span>`).join("") +
     `<span id="scNetSub-${containerId}">–</span></div>`;
   el.innerHTML = holesRow + parRow + scoreRow + netRow;
-  el.querySelectorAll(".cell").forEach((cell) => {
-    cell.addEventListener("click", () => handleCellClick(Number(cell.dataset.h)));
+  el.querySelectorAll("select.cell").forEach((sel) => {
+    sel.addEventListener("focus", () => handleCellFocus(Number(sel.dataset.h)));
+    sel.addEventListener("change", () => handleCellChange(Number(sel.dataset.h), sel.value));
   });
 }
 
@@ -295,16 +300,32 @@ function buildScorecard() {
   buildScoreGrid("scGridBack", holes.filter((h) => h.hole_number > 9), "In");
 }
 
-async function handleCellClick(holeId) {
-  if (!currentRound) return;
+async function saveScore(holeId, strokes) {
   const hole = holes.find((h) => h.id === holeId);
-  const cur = currentRound.scores[holeId];
-  let next;
-  if (cur === undefined) next = hole.par;
-  else if (cur < hole.par + 6) next = cur + 1;
-  else next = undefined;
+  currentRound.scores[holeId] = strokes;
+  if (strokes - hole.par >= 3) popEmoji();
+  renderScorecard();
+  try {
+    await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strokes }),
+    });
+  } catch (err) {
+    setStatus(`Kunde inte spara: ${err.message}`, true);
+  }
+}
 
-  if (next === undefined) {
+function handleCellFocus(holeId) {
+  if (!currentRound) return;
+  if (currentRound.scores[holeId] !== undefined) return;
+  const hole = holes.find((h) => h.id === holeId);
+  saveScore(holeId, hole.par);
+}
+
+async function handleCellChange(holeId, rawValue) {
+  if (!currentRound) return;
+  if (rawValue === "") {
     delete currentRound.scores[holeId];
     renderScorecard();
     try {
@@ -314,19 +335,7 @@ async function handleCellClick(holeId) {
     }
     return;
   }
-
-  currentRound.scores[holeId] = next;
-  if (next - hole.par >= 3) popEmoji();
-  renderScorecard();
-  try {
-    await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ strokes: next }),
-    });
-  } catch (err) {
-    setStatus(`Kunde inte spara: ${err.message}`, true);
-  }
+  await saveScore(holeId, Number(rawValue));
 }
 
 function renderScorecard() {
@@ -340,13 +349,13 @@ function renderScorecard() {
     const netEl = document.getElementById(`net-${h.id}`);
     if (!cell || !netEl) return;
     if (v === undefined) {
-      cell.textContent = "";
+      cell.value = String(h.par);
       cell.className = "cell empty";
       netEl.textContent = "–";
       return;
     }
     const diff = v - h.par;
-    cell.textContent = v;
+    cell.value = String(v);
     cell.className = `cell ${cellClass(diff)}`;
     const net = v - strokesForHole(h, hcp);
     netEl.textContent = net;
