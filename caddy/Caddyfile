@@ -1,0 +1,3 @@
+78-47-168-243.sslip.io {
+    reverse_proxy api:3000
+}
