@@ -1,9 +1,6 @@
 {
     http_port 8091
     https_port 8092
-    servers {
-        protocols h1 h2
-    }
 }
 
 78-47-168-243.sslip.io:8092 {
@@ -15,7 +12,6 @@
 
     handle {
         root * /srv/web
-        header Cache-Control "no-cache, must-revalidate"
         try_files {path} /index.html
         file_server
     }
