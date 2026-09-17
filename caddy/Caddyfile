@@ -12,6 +12,7 @@
 
     handle {
         root * /srv/web
+        header Cache-Control "no-cache, must-revalidate"
         try_files {path} /index.html
         file_server
     }
