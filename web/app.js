@@ -367,6 +367,11 @@ function buildScoreGrid(containerId, subset, totalLabel) {
   el.querySelectorAll("select.cell").forEach((sel) => {
     sel.addEventListener("focus", () => handleCellFocus(Number(sel.dataset.h)));
     sel.addEventListener("change", () => handleCellChange(Number(sel.dataset.h), sel.value));
+    sel.addEventListener("blur", () => {
+      const holeId = Number(sel.dataset.h);
+      const v = currentRound && currentRound.scores[holeId];
+      if (v && v.strokes !== undefined && v.strokes !== null) openStatSheet(holeId);
+    });
   });
   el.querySelectorAll(".detail-btn").forEach((btn) => {
     btn.addEventListener("click", () => openStatSheet(Number(btn.id.replace("detail-", ""))));
@@ -383,7 +388,6 @@ async function saveScore(holeId, strokes) {
   currentRound.scores[holeId] = { ...(currentRound.scores[holeId] || {}), strokes };
   if (strokes - hole.par >= 3) popEmoji();
   renderScorecard();
-  openStatSheet(holeId);
   try {
     await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
       method: "PUT",
