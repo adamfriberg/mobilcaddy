@@ -9,11 +9,15 @@ const mappingLog = document.getElementById("mappingLog");
 const caddyTipEl = document.getElementById("caddyTip");
 const caddyClubEl = document.getElementById("caddyClub");
 const caddyAdviceEl = document.getElementById("caddyAdvice");
+const caddyFootnoteEl = document.getElementById("caddyFootnote");
 const toggleScorecardBtn = document.getElementById("toggleScorecard");
 const scorecardPanel = document.getElementById("scorecardPanel");
+const historyPanel = document.getElementById("historyPanel");
+const clubsPanel = document.getElementById("clubsPanel");
 const hcpInput = document.getElementById("hcpInput");
 const scNewRoundBtn = document.getElementById("scNewRound");
 const emojiPopEl = document.getElementById("emojiPop");
+const statBackdrop = document.getElementById("statBackdrop");
 
 let holes = [];
 let currentHole = null;
@@ -21,7 +25,12 @@ let currentCourseId = null;
 let currentPosition = null;
 let mappingMode = false;
 let scorecardMode = false;
-let currentRound = null; // { id, scores: { [holeId]: strokes } }
+let currentRound = null; // { id, scores: { [holeId]: {strokes, putts, fairway_hit, green_in_regulation, miss_direction} } }
+let liveRound = null; // the actual in-progress round
+let statHoleId = null;
+let userClubs = [];
+let currentWind = null; // { speed, fromDeg }
+let lastWindFetch = 0;
 
 const clubBag = [
   { name: "Driver", dist: 195 },
@@ -51,6 +60,16 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function bearingTo(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+  const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
 async function loadCourse() {
@@ -163,14 +182,38 @@ function renderDistances() {
   updateCaddyTip(mid);
 }
 
+function activeClubBag() {
+  const withDist = userClubs
+    .filter((c) => c.average_distance_m != null)
+    .map((c) => ({ name: c.name, dist: c.average_distance_m }));
+  return withDist.length > 0 ? withDist : clubBag;
+}
+
 function recommendClub(distance) {
-  let best = clubBag[0];
-  let bestDiff = Math.abs(clubBag[0].dist - distance);
-  clubBag.forEach((c) => {
+  const bag = activeClubBag();
+  let best = bag[0];
+  let bestDiff = Math.abs(bag[0].dist - distance);
+  bag.forEach((c) => {
     const diff = Math.abs(c.dist - distance);
     if (diff < bestDiff) { best = c; bestDiff = diff; }
   });
   return best;
+}
+
+function windAdjustment() {
+  if (!currentWind || currentWind.speed < 2 || !currentPosition || !currentHole || !hasGreenCoords(currentHole)) {
+    return { text: "", meters: 0 };
+  }
+  const shotBearing = bearingTo(
+    currentPosition.lat, currentPosition.lng,
+    currentHole.green_mid_lat, currentHole.green_mid_lng
+  );
+  let diff = Math.abs(shotBearing - currentWind.fromDeg);
+  if (diff > 180) diff = 360 - diff;
+  const speed = Math.round(currentWind.speed);
+  if (diff <= 45) return { text: `motvind ${speed} m/s`, meters: Math.round(currentWind.speed * 3) };
+  if (diff >= 135) return { text: `medvind ${speed} m/s`, meters: -Math.round(currentWind.speed * 2) };
+  return { text: `sidvind ${speed} m/s`, meters: 0 };
 }
 
 function updateCaddyTip(mid) {
@@ -179,16 +222,44 @@ function updateCaddyTip(mid) {
     return;
   }
   caddyTipEl.hidden = false;
+  caddyFootnoteEl.hidden = userClubs.some((c) => c.average_distance_m != null);
+
   if (mid <= 15) {
     caddyClubEl.textContent = "Ingen klubba behövs — putt eller kort chip.";
     caddyAdviceEl.textContent = "Du är precis vid green — tänk kort spel och en säker putt.";
     return;
   }
-  const club = recommendClub(mid);
-  caddyClubEl.textContent = `Rekommenderad klubba: ${club.name} (≈${club.dist} m)`;
+  const wind = windAdjustment();
+  const effective = Math.max(mid + wind.meters, 1);
+  const club = recommendClub(effective);
+  const windSuffix = wind.text ? ` — ${wind.text}` : "";
+  caddyClubEl.textContent = `Rekommenderad klubba: ${club.name} (≈${club.dist} m)${windSuffix}`;
   caddyAdviceEl.textContent = mid <= 40
     ? "Nära green — chippa eller kör en kort wedge in mot flaggan."
     : `${mid} m kvar till mitten av green.`;
+}
+
+async function fetchWind(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms`
+    );
+    const data = await res.json();
+    if (data && data.current) {
+      currentWind = { speed: data.current.wind_speed_10m, fromDeg: data.current.wind_direction_10m };
+      renderDistances();
+    }
+  } catch (err) {
+    // wind is a nice-to-have — fail silently
+  }
+}
+
+function maybeFetchWind() {
+  if (!currentPosition) return;
+  const now = Date.now();
+  if (now - lastWindFetch < 10 * 60 * 1000) return;
+  lastWindFetch = now;
+  fetchWind(currentPosition.lat, currentPosition.lng);
 }
 
 function watchPosition() {
@@ -200,6 +271,7 @@ function watchPosition() {
     (pos) => {
       currentPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       renderDistances();
+      maybeFetchWind();
     },
     (err) => setStatus(`GPS-fel: ${err.message}`, true),
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
@@ -285,13 +357,19 @@ function buildScoreGrid(containerId, subset, totalLabel) {
       return `<span><select class="cell" data-h="${h.id}" id="cell-${h.id}">${opts}</select></span>`;
     }).join("") +
     `<span class="out" id="scSub-${containerId}">–</span></div>`;
+  const detailRow = '<div class="sc-grid-row detail">' +
+    subset.map((h) => `<span><button class="detail-btn" id="detail-${h.id}" disabled>·</button></span>`).join("") +
+    `<span></span></div>`;
   const netRow = '<div class="sc-grid-row net">' +
     subset.map((h) => `<span id="net-${h.id}">–</span>`).join("") +
     `<span id="scNetSub-${containerId}">–</span></div>`;
-  el.innerHTML = holesRow + parRow + scoreRow + netRow;
+  el.innerHTML = holesRow + parRow + scoreRow + detailRow + netRow;
   el.querySelectorAll("select.cell").forEach((sel) => {
     sel.addEventListener("focus", () => handleCellFocus(Number(sel.dataset.h)));
     sel.addEventListener("change", () => handleCellChange(Number(sel.dataset.h), sel.value));
+  });
+  el.querySelectorAll(".detail-btn").forEach((btn) => {
+    btn.addEventListener("click", () => openStatSheet(Number(btn.id.replace("detail-", ""))));
   });
 }
 
@@ -302,9 +380,10 @@ function buildScorecard() {
 
 async function saveScore(holeId, strokes) {
   const hole = holes.find((h) => h.id === holeId);
-  currentRound.scores[holeId] = strokes;
+  currentRound.scores[holeId] = { ...(currentRound.scores[holeId] || {}), strokes };
   if (strokes - hole.par >= 3) popEmoji();
   renderScorecard();
+  openStatSheet(holeId);
   try {
     await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
       method: "PUT",
@@ -317,14 +396,15 @@ async function saveScore(holeId, strokes) {
 }
 
 function handleCellFocus(holeId) {
-  if (!currentRound) return;
-  if (currentRound.scores[holeId] !== undefined) return;
+  if (!currentRound || currentRound !== liveRound) return;
+  const existing = currentRound.scores[holeId];
+  if (existing && existing.strokes !== undefined && existing.strokes !== null) return;
   const hole = holes.find((h) => h.id === holeId);
   saveScore(holeId, hole.par);
 }
 
 async function handleCellChange(holeId, rawValue) {
-  if (!currentRound) return;
+  if (!currentRound || currentRound !== liveRound) return;
   if (rawValue === "") {
     delete currentRound.scores[holeId];
     renderScorecard();
@@ -347,23 +427,29 @@ function renderScorecard() {
     const v = scores[h.id];
     const cell = document.getElementById(`cell-${h.id}`);
     const netEl = document.getElementById(`net-${h.id}`);
+    const detailBtn = document.getElementById(`detail-${h.id}`);
     if (!cell || !netEl) return;
-    if (v === undefined) {
+    if (!v || v.strokes === undefined || v.strokes === null) {
       cell.value = String(h.par);
       cell.className = "cell empty";
       netEl.textContent = "–";
+      if (detailBtn) { detailBtn.disabled = true; detailBtn.textContent = "·"; }
       return;
     }
-    const diff = v - h.par;
-    cell.value = String(v);
+    const diff = v.strokes - h.par;
+    cell.value = String(v.strokes);
     cell.className = `cell ${cellClass(diff)}`;
-    const net = v - strokesForHole(h, hcp);
+    if (detailBtn) {
+      detailBtn.disabled = false;
+      detailBtn.textContent = v.putts !== undefined && v.putts !== null ? `${v.putts}p` : "•";
+    }
+    const net = v.strokes - strokesForHole(h, hcp);
     netEl.textContent = net;
-    total += v;
+    total += v.strokes;
     netTotal += net;
     played++;
     playedPar += h.par;
-    if (h.hole_number <= 9) { frontSum += v; frontNet += net; } else { backSum += v; backNet += net; }
+    if (h.hole_number <= 9) { frontSum += v.strokes; frontNet += net; } else { backSum += v.strokes; backNet += net; }
   });
 
   const frontPar = holes.filter((h) => h.hole_number <= 9).reduce((s, h) => s + h.par, 0);
@@ -399,6 +485,7 @@ async function loadActiveRound() {
     } else {
       currentRound = await startNewRound();
     }
+    liveRound = currentRound;
     renderScorecard();
   } catch (err) {
     setStatus(`Kunde inte ladda scorekort: ${err.message}`, true);
@@ -415,6 +502,207 @@ async function startNewRound() {
   return { id: data.id, scores: {} };
 }
 
+function setScorecardEditable(editable) {
+  document.querySelectorAll("select.cell").forEach((sel) => { sel.disabled = !editable; });
+}
+
+function formatRoundDate(iso) {
+  return new Date(iso).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// --- Statistik-sheet (dyker upp direkt efter score) ---
+
+let statSheetReadOnly = false;
+
+function openStatSheet(holeId) {
+  const hole = holes.find((h) => h.id === holeId);
+  statHoleId = holeId;
+  statSheetReadOnly = currentRound !== liveRound;
+  document.getElementById("statSheetTitle").textContent =
+    `Hål ${hole.hole_number} — detaljer${statSheetReadOnly ? " (skrivskyddad)" : ""}`;
+  document.getElementById("firRow").style.display = hole.par === 3 ? "none" : "";
+  document.getElementById("statSheet").classList.toggle("readonly", statSheetReadOnly);
+  const stat = currentRound.scores[holeId] || {};
+  document.querySelectorAll(".stat-btns").forEach((group) => {
+    const field = group.dataset.field;
+    let strVal;
+    const raw = stat[field];
+    if (raw === undefined || raw === null) strVal = undefined;
+    else if (field === "putts") strVal = raw >= 4 ? "4" : String(raw);
+    else if (field === "miss_direction") strVal = raw;
+    else strVal = String(raw);
+    group.querySelectorAll("button").forEach((btn) => {
+      btn.classList.toggle("active", strVal !== undefined && btn.dataset.val === strVal);
+      btn.disabled = statSheetReadOnly;
+    });
+  });
+  statBackdrop.hidden = false;
+}
+
+function closeStatSheet() {
+  statBackdrop.hidden = true;
+  statHoleId = null;
+}
+
+async function saveStat(holeId, field, value) {
+  if (!currentRound || currentRound !== liveRound) return;
+  currentRound.scores[holeId] = { ...(currentRound.scores[holeId] || {}), [field]: value };
+  try {
+    await fetch(`/api/rounds/${currentRound.id}/holes/${holeId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+  } catch (err) {
+    setStatus(`Kunde inte spara: ${err.message}`, true);
+  }
+}
+
+document.querySelectorAll(".stat-btns").forEach((group) => {
+  group.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const field = group.dataset.field;
+      const val = btn.dataset.val;
+      let sendVal;
+      if (field === "fairway_hit" || field === "green_in_regulation") sendVal = val === "true";
+      else if (field === "putts") sendVal = val === "4" ? 4 : Number(val);
+      else sendVal = val;
+      group.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (statHoleId !== null) saveStat(statHoleId, field, sendVal);
+    });
+  });
+});
+
+document.getElementById("statSheetClose").addEventListener("click", closeStatSheet);
+statBackdrop.addEventListener("click", (e) => {
+  if (e.target === statBackdrop) closeStatSheet();
+});
+
+// --- Rundor (historik) ---
+
+async function loadHistory() {
+  const listEl = document.getElementById("historyList");
+  listEl.innerHTML = '<p class="history-empty">Laddar...</p>';
+  try {
+    const res = await fetch(`/api/rounds?course_id=${currentCourseId}`);
+    const rounds = await res.json();
+    if (rounds.length === 0) {
+      listEl.innerHTML = '<p class="history-empty">Inga sparade rundor ännu.</p>';
+      return;
+    }
+    listEl.innerHTML = rounds.map((r) => {
+      const played = r.holes_played > 0;
+      const toPar = r.total_strokes - r.total_par;
+      const toParStr = played ? (toPar > 0 ? `+${toPar}` : toPar === 0 ? "E" : toPar) : "–";
+      const label = r.finished ? "" : " · pågående";
+      return `<div class="history-row" data-id="${r.id}">
+        <span class="date">${formatRoundDate(r.played_at)}${label}</span>
+        <span class="stat">${played ? r.total_strokes + " slag" : "inga slag"} · ${toParStr}</span>
+      </div>`;
+    }).join("");
+    listEl.querySelectorAll(".history-row").forEach((row) => {
+      row.addEventListener("click", () => viewRound(Number(row.dataset.id)));
+    });
+  } catch (err) {
+    listEl.innerHTML = `<p class="history-empty">Kunde inte ladda: ${err.message}</p>`;
+  }
+}
+
+async function viewRound(roundId) {
+  try {
+    const res = await fetch(`/api/rounds/${roundId}`);
+    const data = await res.json();
+    currentRound = { id: data.id, scores: data.scores };
+    const isLive = liveRound && data.id === liveRound.id;
+    hideSecondaryPanels();
+    scorecardPanel.hidden = false;
+    scorecardMode = true;
+    toggleScorecardBtn.textContent = "Dölj scorekort";
+    setScorecardEditable(isLive);
+    document.getElementById("historyBannerText").textContent = isLive
+      ? "Pågående runda"
+      : `Visar rundan från ${formatRoundDate(data.played_at)} (skrivskyddad)`;
+    document.getElementById("historyBanner").hidden = isLive;
+    renderScorecard();
+  } catch (err) {
+    setStatus(`Kunde inte ladda rundan: ${err.message}`, true);
+  }
+}
+
+function backToLive() {
+  currentRound = liveRound;
+  document.getElementById("historyBanner").hidden = true;
+  setScorecardEditable(true);
+  renderScorecard();
+}
+
+// --- Klubbor ---
+
+async function loadClubs() {
+  try {
+    const res = await fetch("/api/clubs");
+    userClubs = await res.json();
+    renderClubsList();
+  } catch (err) {
+    // caddytipset faller tillbaka på generiska avstånd
+  }
+}
+
+function renderClubsList() {
+  const listEl = document.getElementById("clubsList");
+  if (userClubs.length === 0) {
+    listEl.innerHTML = '<p class="history-empty">Inga klubbor tillagda — caddytipset använder generiska avstånd tills vidare.</p>';
+    return;
+  }
+  listEl.innerHTML = userClubs.map((c) => `
+    <div class="club-row">
+      <span class="club-name">${c.name}</span>
+      <span class="club-dist">${c.average_distance_m != null ? c.average_distance_m + " m" : "—"}</span>
+      <button class="club-del" data-id="${c.id}">Ta bort</button>
+    </div>
+  `).join("");
+  listEl.querySelectorAll(".club-del").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await fetch(`/api/clubs/${btn.dataset.id}`, { method: "DELETE" });
+        loadClubs();
+      } catch (err) {
+        setStatus(`Kunde inte ta bort: ${err.message}`, true);
+      }
+    });
+  });
+}
+
+document.getElementById("clubAddBtn").addEventListener("click", async () => {
+  const nameInput = document.getElementById("clubNameInput");
+  const distInput = document.getElementById("clubDistInput");
+  const name = nameInput.value.trim();
+  if (!name) return;
+  try {
+    await fetch("/api/clubs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, average_distance_m: distInput.value ? Number(distInput.value) : null }),
+    });
+    nameInput.value = "";
+    distInput.value = "";
+    loadClubs();
+  } catch (err) {
+    setStatus(`Kunde inte lägga till klubba: ${err.message}`, true);
+  }
+});
+
+// --- Panel-navigering ---
+
+function hideSecondaryPanels() {
+  scorecardPanel.hidden = true;
+  historyPanel.hidden = true;
+  clubsPanel.hidden = true;
+  scorecardMode = false;
+  toggleScorecardBtn.textContent = "Scorekort";
+}
+
 holeSelect.addEventListener("change", (e) => selectHole(e.target.value));
 
 toggleMappingBtn.addEventListener("click", () => {
@@ -428,10 +716,28 @@ document.querySelectorAll("#mappingPanel button[data-point]").forEach((btn) => {
 });
 
 toggleScorecardBtn.addEventListener("click", () => {
-  scorecardMode = !scorecardMode;
-  scorecardPanel.hidden = !scorecardMode;
-  toggleScorecardBtn.textContent = scorecardMode ? "Dölj scorekort" : "Scorekort";
+  const opening = scorecardPanel.hidden;
+  hideSecondaryPanels();
+  scorecardPanel.hidden = !opening;
+  scorecardMode = opening;
+  toggleScorecardBtn.textContent = opening ? "Dölj scorekort" : "Scorekort";
+  if (opening && currentRound !== liveRound) backToLive();
 });
+
+document.getElementById("toggleHistory").addEventListener("click", () => {
+  const opening = historyPanel.hidden;
+  hideSecondaryPanels();
+  historyPanel.hidden = !opening;
+  if (opening) loadHistory();
+});
+
+document.getElementById("toggleClubs").addEventListener("click", () => {
+  const opening = clubsPanel.hidden;
+  hideSecondaryPanels();
+  clubsPanel.hidden = !opening;
+});
+
+document.getElementById("backToLive").addEventListener("click", backToLive);
 
 hcpInput.addEventListener("input", () => {
   localStorage.setItem("mc_hcp", hcpInput.value);
@@ -440,7 +746,9 @@ hcpInput.addEventListener("input", () => {
 
 scNewRoundBtn.addEventListener("click", async () => {
   if (!confirm("Starta en ny runda? Den pågående rundan avslutas.")) return;
-  currentRound = await startNewRound();
+  currentRound = liveRound = await startNewRound();
+  document.getElementById("historyBanner").hidden = true;
+  setScorecardEditable(true);
   renderScorecard();
 });
 
@@ -448,4 +756,5 @@ const savedHcp = localStorage.getItem("mc_hcp");
 if (savedHcp) hcpInput.value = savedHcp;
 
 loadCourse().catch((err) => setStatus(`Kunde inte ladda bana: ${err.message}`, true));
+loadClubs();
 watchPosition();

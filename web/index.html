@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Mobilcaddy</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0e1a12" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mobilcaddy" />
 </head>
 <body>
   <header class="topbar">
@@ -27,7 +33,7 @@
     <section id="caddyTip" class="caddy-tip" hidden>
       <div class="caddy-club" id="caddyClub"></div>
       <div class="caddy-advice" id="caddyAdvice"></div>
-      <div class="caddy-footnote">Klubbavstånd är exempeldata tills dina egna sparats i Klubbor.</div>
+      <div class="caddy-footnote" id="caddyFootnote">Klubbavstånd är exempeldata tills dina egna sparats i Klubbor.</div>
     </section>
 
     <section class="mapping-toggle">
@@ -47,9 +53,28 @@
 
     <section class="scorecard-toggle">
       <button id="toggleScorecard">Scorekort</button>
+      <button id="toggleHistory">Rundor</button>
+      <button id="toggleClubs">Klubbor</button>
+    </section>
+
+    <section id="clubsPanel" hidden>
+      <div id="clubsList"></div>
+      <div class="club-add-row">
+        <input type="text" id="clubNameInput" placeholder="Klubba, t.ex. 7-järn" />
+        <input type="number" id="clubDistInput" placeholder="m" />
+        <button id="clubAddBtn">Lägg till</button>
+      </div>
+    </section>
+
+    <section id="historyPanel" hidden>
+      <div id="historyList"></div>
     </section>
 
     <section id="scorecardPanel" hidden>
+      <div class="history-banner" id="historyBanner" hidden>
+        <span id="historyBannerText"></span>
+        <button id="backToLive">Tillbaka</button>
+      </div>
       <div class="sc-card">
         <div class="sc-head">
           <div>
@@ -72,6 +97,52 @@
       <button class="sc-reset" id="scNewRound">Starta ny runda</button>
     </section>
   </main>
+
+  <div class="stat-sheet-backdrop" id="statBackdrop" hidden>
+    <div class="stat-sheet" id="statSheet">
+      <div class="stat-sheet-title" id="statSheetTitle">Detaljer</div>
+
+      <div class="stat-row" id="firRow">
+        <span class="stat-label">Fairway</span>
+        <div class="stat-btns" data-field="fairway_hit">
+          <button data-val="true">Träffad</button>
+          <button data-val="false">Missad</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Green (GIR)</span>
+        <div class="stat-btns" data-field="green_in_regulation">
+          <button data-val="true">Ja</button>
+          <button data-val="false">Nej</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Puttar</span>
+        <div class="stat-btns" data-field="putts">
+          <button data-val="0">0</button>
+          <button data-val="1">1</button>
+          <button data-val="2">2</button>
+          <button data-val="3">3</button>
+          <button data-val="4">4+</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <span class="stat-label">Missriktning</span>
+        <div class="stat-btns" data-field="miss_direction">
+          <button data-val="">Rakt på</button>
+          <button data-val="short">Kort</button>
+          <button data-val="long">Långt</button>
+          <button data-val="left">Vänster</button>
+          <button data-val="right">Höger</button>
+        </div>
+      </div>
+
+      <button class="sc-reset" id="statSheetClose">Klar</button>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
