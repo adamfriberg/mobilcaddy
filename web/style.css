@@ -50,6 +50,7 @@ button { font-size: 15px; padding: 10px 14px; border-radius: 8px; border: none; 
   position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 60;
   display: flex; align-items: flex-end; justify-content: center;
 }
+.stat-sheet-backdrop[hidden] { display: none; }
 .stat-sheet {
   background: #133620; width: 100%; max-width: 480px; border-radius: 16px 16px 0 0;
   padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
@@ -73,6 +74,7 @@ button { font-size: 15px; padding: 10px 14px; border-radius: 8px; border: none; 
 .stat-btns button.active { background: #2e7d46; border-color: #2e7d46; }
 
 .history-banner { display: flex; align-items: center; gap: 10px; background: #163d24; padding: 8px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; }
+.history-banner[hidden] { display: none; }
 .history-banner button { padding: 5px 10px; font-size: 12px; margin-left: auto; }
 .history-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; border-bottom: 1px solid #23422e; cursor: pointer; }
 .history-row .date { font-weight: 600; }
