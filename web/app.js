@@ -369,8 +369,10 @@ function buildScoreGrid(containerId, subset, totalLabel) {
     sel.addEventListener("change", () => handleCellChange(Number(sel.dataset.h), sel.value));
     sel.addEventListener("blur", () => {
       const holeId = Number(sel.dataset.h);
-      const v = currentRound && currentRound.scores[holeId];
-      if (v && v.strokes !== undefined && v.strokes !== null) openStatSheet(holeId);
+      setTimeout(() => {
+        const v = currentRound && currentRound.scores[holeId];
+        if (v && v.strokes !== undefined && v.strokes !== null) openStatSheet(holeId);
+      }, 200);
     });
   });
   el.querySelectorAll(".detail-btn").forEach((btn) => {
@@ -581,6 +583,9 @@ document.querySelectorAll(".stat-btns").forEach((group) => {
 document.getElementById("statSheetClose").addEventListener("click", closeStatSheet);
 statBackdrop.addEventListener("click", (e) => {
   if (e.target === statBackdrop) closeStatSheet();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !statBackdrop.hidden) closeStatSheet();
 });
 
 // --- Rundor (historik) ---
