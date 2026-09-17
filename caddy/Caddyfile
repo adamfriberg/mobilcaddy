@@ -1,6 +1,9 @@
 {
     http_port 8091
     https_port 8092
+    servers {
+        protocols h1 h2
+    }
 }
 
 78-47-168-243.sslip.io:8092 {
