@@ -17,13 +17,16 @@ main { max-width: 480px; margin: 0 auto; padding: 12px 16px 32px; }
 .hole-image { width: 100%; border-radius: 12px; display: block; margin-bottom: 8px; }
 .hole-tips { font-size: 14px; font-weight: 400; line-height: 1.4; opacity: 0.9; margin: 0 0 8px; }
 .map-wrap { background: #163d24; border-radius: 12px; padding: 8px; }
-svg#holeMap { width: 100%; height: auto; display: block; }
-.fairway-line { stroke: #4caf6b; stroke-width: 4; stroke-dasharray: 6 6; }
-.distance-ring { fill: #9fd8b0; font-size: 11px; }
-.tee-marker { fill: #ffd54f; }
-.green-marker { fill: #4caf6b; }
-.green-marker.unmapped { fill: #55603a; stroke: #ffb74d; stroke-width: 2; stroke-dasharray: 4 3; }
-.unmapped-label { fill: #ffb74d; font-size: 11px; }
+.photo-map { position: relative; width: 100%; border-radius: 10px; overflow: hidden; touch-action: none; line-height: 0; }
+.photo-map-img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.photo-marker {
+  position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+  border-radius: 50%; background: #eef5ef; border: 3px solid #2e7d46;
+  box-shadow: 0 0 0 2px rgba(0,0,0,0.45); cursor: grab; touch-action: none;
+}
+.photo-marker.dragging { cursor: grabbing; background: #ffd54f; }
+.map-estimate { margin-top: 8px; font-size: 15px; font-weight: 700; text-align: center; }
+.map-hint { font-size: 11px; opacity: 0.55; text-align: center; margin: 4px 0 0; }
 .distances { margin-top: 12px; font-size: 20px; font-weight: 700; text-align: center; }
 .mapping-toggle { margin-top: 20px; text-align: center; }
 button { font-size: 15px; padding: 10px 14px; border-radius: 8px; border: none; background: #2e7d46; color: white; }

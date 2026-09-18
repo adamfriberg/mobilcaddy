@@ -25,7 +25,12 @@
     <section id="holeInfo" class="hole-info"></section>
 
     <section class="map-wrap">
-      <svg id="holeMap" viewBox="0 0 300 500" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="photo-map" id="photoMap">
+        <img id="holePhoto" class="photo-map-img" alt="">
+        <div class="photo-marker" id="photoMarker"></div>
+      </div>
+      <div class="map-estimate" id="mapEstimate">Dra cirkeln för ett ungefärligt avstånd</div>
+      <p class="map-hint">Cirkeln ger en uppskattning utifrån hålets längd — exakt GPS-avstånd kommer när hålet är kartlagt.</p>
     </section>
 
     <section id="distances" class="distances"></section>

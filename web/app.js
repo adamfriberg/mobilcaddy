@@ -2,7 +2,6 @@ const statusEl = document.getElementById("status");
 const holeSelect = document.getElementById("holeSelect");
 const holeInfoEl = document.getElementById("holeInfo");
 const distancesEl = document.getElementById("distances");
-const mapEl = document.getElementById("holeMap");
 const toggleMappingBtn = document.getElementById("toggleMapping");
 const mappingPanel = document.getElementById("mappingPanel");
 const mappingLog = document.getElementById("mappingLog");
@@ -96,75 +95,92 @@ function selectHole(holeId) {
   currentHole = holes.find((h) => h.id === Number(holeId)) || null;
   holeSelect.value = holeId;
   renderHoleInfo();
-  renderMap();
+  renderPhotoMap();
   renderDistances();
 }
 
 function renderHoleInfo() {
   if (!currentHole) return;
   const meta = `Hål ${currentHole.hole_number} · Par ${currentHole.par} · ${currentHole.length_meters ?? "?"} m · Hcp ${currentHole.handicap_index ?? "?"}`;
-  const image = currentHole.image_url
-    ? `<img src="${currentHole.image_url}" alt="Hål ${currentHole.hole_number}" class="hole-image">`
-    : "";
   const tips = currentHole.tips
     ? `<p class="hole-tips">${currentHole.tips.replace(/\n/g, "<br>")}</p>`
     : "";
-  holeInfoEl.innerHTML = `<div class="hole-meta">${meta}</div>${image}${tips}`;
+  holeInfoEl.innerHTML = `<div class="hole-meta">${meta}</div>${tips}`;
 }
 
 function hasGreenCoords(h) {
   return h && h.green_mid_lat != null && h.green_mid_lng != null;
 }
 
-function renderMap() {
-  mapEl.innerHTML = "";
+let markerDragging = false;
+
+function setMarkerPercent(xPct, yPct) {
+  const marker = document.getElementById("photoMarker");
+  if (!marker) return;
+  marker.style.left = xPct + "%";
+  marker.style.top = yPct + "%";
+  updateMapEstimate(yPct);
+}
+
+function updateMapEstimate(yPct) {
+  const estEl = document.getElementById("mapEstimate");
+  if (!currentHole || !estEl) return;
+  const length = currentHole.length_meters;
+  if (!length) {
+    estEl.textContent = "Avstånd saknas för det här hålet.";
+    return;
+  }
+  const progress = yPct / 100; // 0 = överkant bild (green), 1 = nederkant (tee)
+  const mid = Math.max(Math.round(length * progress), 0);
+  const front = Math.max(mid - 8, 0);
+  const back = mid + 8;
+  estEl.textContent = `Uppskattat: Fram ~${front} m · Mitt ~${mid} m · Bak ~${back} m`;
+}
+
+function photoMapPointFromEvent(e) {
+  const rect = document.getElementById("photoMap").getBoundingClientRect();
+  const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+  const yPct = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+  return { xPct, yPct };
+}
+
+function initPhotoMap() {
+  const marker = document.getElementById("photoMarker");
+  const photoMapEl = document.getElementById("photoMap");
+
+  marker.addEventListener("pointerdown", (e) => {
+    markerDragging = true;
+    marker.classList.add("dragging");
+    marker.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  marker.addEventListener("pointermove", (e) => {
+    if (!markerDragging) return;
+    const { xPct, yPct } = photoMapPointFromEvent(e);
+    setMarkerPercent(xPct, yPct);
+  });
+  marker.addEventListener("pointerup", () => {
+    markerDragging = false;
+    marker.classList.remove("dragging");
+  });
+  marker.addEventListener("pointercancel", () => {
+    markerDragging = false;
+    marker.classList.remove("dragging");
+  });
+
+  photoMapEl.addEventListener("pointerdown", (e) => {
+    if (e.target === marker) return;
+    const { xPct, yPct } = photoMapPointFromEvent(e);
+    setMarkerPercent(xPct, yPct);
+  });
+}
+
+function renderPhotoMap() {
   if (!currentHole) return;
-
-  const ns = "http://www.w3.org/2000/svg";
-  const teeY = 460, greenY = 60, midX = 150;
-
-  const fairway = document.createElementNS(ns, "line");
-  fairway.setAttribute("x1", midX);
-  fairway.setAttribute("y1", teeY);
-  fairway.setAttribute("x2", midX);
-  fairway.setAttribute("y2", greenY);
-  fairway.setAttribute("class", "fairway-line");
-  mapEl.appendChild(fairway);
-
-  for (let d = 50; d < 450; d += 50) {
-    const y = teeY - (d / 450) * (teeY - greenY);
-    const ring = document.createElementNS(ns, "text");
-    ring.setAttribute("x", midX + 20);
-    ring.setAttribute("y", y);
-    ring.setAttribute("class", "distance-ring");
-    ring.textContent = `${d}m`;
-    mapEl.appendChild(ring);
-  }
-
-  const tee = document.createElementNS(ns, "circle");
-  tee.setAttribute("cx", midX);
-  tee.setAttribute("cy", teeY);
-  tee.setAttribute("r", 8);
-  tee.setAttribute("class", "tee-marker");
-  mapEl.appendChild(tee);
-
-  const green = document.createElementNS(ns, "ellipse");
-  green.setAttribute("cx", midX);
-  green.setAttribute("cy", greenY);
-  green.setAttribute("rx", 26);
-  green.setAttribute("ry", 18);
-  green.setAttribute("class", hasGreenCoords(currentHole) ? "green-marker" : "green-marker unmapped");
-  mapEl.appendChild(green);
-
-  if (!hasGreenCoords(currentHole)) {
-    const label = document.createElementNS(ns, "text");
-    label.setAttribute("x", midX);
-    label.setAttribute("y", greenY - 28);
-    label.setAttribute("class", "unmapped-label");
-    label.setAttribute("text-anchor", "middle");
-    label.textContent = "Green ej kartlagd";
-    mapEl.appendChild(label);
-  }
+  const img = document.getElementById("holePhoto");
+  img.src = currentHole.image_url || "";
+  img.alt = `Hål ${currentHole.hole_number}`;
+  setMarkerPercent(50, 88);
 }
 
 function renderDistances() {
@@ -311,7 +327,6 @@ async function saveCoord(pointPrefix) {
     const updated = await res.json();
     Object.assign(currentHole, updated);
     mappingLog.textContent = `Sparat ${pointPrefix} för hål ${currentHole.hole_number}.`;
-    renderMap();
     renderDistances();
   } catch (err) {
     mappingLog.textContent = `Kunde inte spara: ${err.message}`;
@@ -764,6 +779,7 @@ scNewRoundBtn.addEventListener("click", async () => {
 const savedHcp = localStorage.getItem("mc_hcp");
 if (savedHcp) hcpInput.value = savedHcp;
 
+initPhotoMap();
 loadCourse().catch((err) => setStatus(`Kunde inte ladda bana: ${err.message}`, true));
 loadClubs();
 watchPosition();
