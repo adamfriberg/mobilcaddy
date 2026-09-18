@@ -39,7 +39,9 @@ app.get("/api/courses/:id/holes", async (req, res) => {
               tee_lat, tee_lng,
               green_front_lat, green_front_lng,
               green_mid_lat, green_mid_lng,
-              green_back_lat, green_back_lng
+              green_back_lat, green_back_lng,
+              tee_image_x, tee_image_y,
+              green_mid_image_x, green_mid_image_y
        FROM holes
        WHERE course_id = $1
        ORDER BY hole_number`,
@@ -64,6 +66,8 @@ const COORD_FIELDS = [
   "green_front_lat", "green_front_lng",
   "green_mid_lat", "green_mid_lng",
   "green_back_lat", "green_back_lng",
+  "tee_image_x", "tee_image_y",
+  "green_mid_image_x", "green_mid_image_y",
 ];
 
 app.put("/api/holes/:id/coords", requireAdminKey, async (req, res) => {

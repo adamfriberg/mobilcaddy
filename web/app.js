@@ -113,18 +113,59 @@ function hasGreenCoords(h) {
 }
 
 let markerDragging = false;
+let markerPos = { x: 50, y: 88 };
 
 function setMarkerPercent(xPct, yPct) {
   const marker = document.getElementById("photoMarker");
   if (!marker) return;
+  markerPos = { x: xPct, y: yPct };
   marker.style.left = xPct + "%";
   marker.style.top = yPct + "%";
-  updateMapEstimate(yPct);
+  updateMapEstimate(xPct, yPct);
 }
 
-function updateMapEstimate(yPct) {
+function getCalibration(hole) {
+  if (!hole) return null;
+  if (hole.tee_image_x == null || hole.tee_image_y == null) return null;
+  if (hole.green_mid_image_x == null || hole.green_mid_image_y == null) return null;
+  if (hole.tee_lat == null || hole.tee_lng == null) return null;
+  if (hole.green_mid_lat == null || hole.green_mid_lng == null) return null;
+  const realDist = distanceMeters(hole.tee_lat, hole.tee_lng, hole.green_mid_lat, hole.green_mid_lng);
+  if (!realDist) return null;
+  return {
+    teeImg: { x: hole.tee_image_x, y: hole.tee_image_y },
+    greenImg: { x: hole.green_mid_image_x, y: hole.green_mid_image_y },
+    realDist,
+  };
+}
+
+function calibratedDistances(xPct, yPct) {
+  const cal = getCalibration(currentHole);
+  const img = document.getElementById("holePhoto");
+  if (!cal || !img.naturalWidth) return null;
+  const toPx = (pt) => ({ x: (pt.x / 100) * img.naturalWidth, y: (pt.y / 100) * img.naturalHeight });
+  const teePx = toPx(cal.teeImg);
+  const greenPx = toPx(cal.greenImg);
+  const markerPx = toPx({ x: xPct, y: yPct });
+  const calibPxDist = Math.hypot(teePx.x - greenPx.x, teePx.y - greenPx.y);
+  if (!calibPxDist) return null;
+  const metersPerPx = cal.realDist / calibPxDist;
+  const mid = Math.round(Math.hypot(markerPx.x - greenPx.x, markerPx.y - greenPx.y) * metersPerPx);
+  return { front: Math.max(mid - 8, 0), mid, back: mid + 8 };
+}
+
+function updateMapEstimate(xPct, yPct) {
   const estEl = document.getElementById("mapEstimate");
   if (!currentHole || !estEl) return;
+
+  const calibrated = calibratedDistances(xPct, yPct);
+  if (calibrated) {
+    estEl.textContent = `Kalibrerat: Fram ~${calibrated.front} m · Mitt ~${calibrated.mid} m · Bak ~${calibrated.back} m`;
+    estEl.classList.add("calibrated");
+    return;
+  }
+  estEl.classList.remove("calibrated");
+
   const length = currentHole.length_meters;
   if (!length) {
     estEl.textContent = "Avstånd saknas för det här hålet.";
@@ -178,6 +219,7 @@ function initPhotoMap() {
 function renderPhotoMap() {
   if (!currentHole) return;
   const img = document.getElementById("holePhoto");
+  img.onload = () => updateMapEstimate(markerPos.x, markerPos.y);
   img.src = currentHole.image_url || "";
   img.alt = `Hål ${currentHole.hole_number}`;
   setMarkerPercent(50, 88);
@@ -312,6 +354,12 @@ async function saveCoord(pointPrefix) {
     [`${pointPrefix}_lat`]: currentPosition.lat,
     [`${pointPrefix}_lng`]: currentPosition.lng,
   };
+  let savedImagePos = false;
+  if (pointPrefix === "tee" || pointPrefix === "green_mid") {
+    body[`${pointPrefix}_image_x`] = markerPos.x;
+    body[`${pointPrefix}_image_y`] = markerPos.y;
+    savedImagePos = true;
+  }
   const key = getAdminKey();
   try {
     const res = await fetch(`/api/holes/${currentHole.id}/coords`, {
@@ -326,7 +374,10 @@ async function saveCoord(pointPrefix) {
     }
     const updated = await res.json();
     Object.assign(currentHole, updated);
-    mappingLog.textContent = `Sparat ${pointPrefix} för hål ${currentHole.hole_number}.`;
+    mappingLog.textContent = savedImagePos
+      ? `Sparat ${pointPrefix} (GPS + bildposition) för hål ${currentHole.hole_number}.`
+      : `Sparat ${pointPrefix} för hål ${currentHole.hole_number}.`;
+    updateMapEstimate(markerPos.x, markerPos.y);
     renderDistances();
   } catch (err) {
     mappingLog.textContent = `Kunde inte spara: ${err.message}`;
